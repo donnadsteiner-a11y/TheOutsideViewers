@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>TheOutsideViewers — Sentiment Pipeline</title>
+  <style>
+    :root { --ink: #0A1628; --paper: #F5F1EB; --accent: #4A6FA5; --line: #D6CFC4; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, system-ui, "Segoe UI", sans-serif;
+      max-width: 900px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      background: var(--paper);
+      color: var(--ink);
+    }
+    h1 { font-weight: 300; letter-spacing: -0.02em; margin-bottom: 0.25rem; }
+    .tag { font-size: 0.85rem; color: #666; margin-bottom: 2rem; }
+    h2 { font-weight: 400; border-bottom: 1px solid var(--line); padding-bottom: 0.5rem; }
+    .topic { padding: 1rem; border: 1px solid var(--line); margin: 0.5rem 0; background: white; border-radius: 4px; }
+    .topic-name { font-weight: 600; }
+    .topic-desc { color: #666; font-size: 0.9rem; margin: 0.25rem 0 0.75rem; }
+    button { padding: 0.4rem 0.8rem; cursor: pointer; background: var(--ink); color: var(--paper); border: 0; border-radius: 3px; font-size: 0.9rem; }
+    button:hover { background: var(--accent); }
+    input { padding: 0.5rem; margin: 0.25rem 0.25rem 0.25rem 0; border: 1px solid var(--line); border-radius: 3px; font-size: 0.9rem; }
+    .row { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+    pre { background: #1a2538; color: #f0e8d8; padding: 1rem; border-radius: 4px; overflow-x: auto; font-size: 0.85rem; }
+    #log { max-height: 200px; overflow-y: auto; }
+  </style>
+</head>
+<body>
+  <h1>TheOutsideViewers</h1>
+  <div class="tag">Sentiment Intelligence Pipeline · v0.1</div>
+
+  <section>
+    <h2>New Topic</h2>
+    <div class="row">
+      <input id="topic-name" placeholder="Topic name (e.g., Fed rate decision May 2026)" style="flex: 2;">
+      <input id="topic-desc" placeholder="Description (optional)" style="flex: 3;">
+      <button onclick="createTopic()">Create</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Topics</h2>
+    <div id="topics"></div>
+  </section>
+
+  <section>
+    <h2>Log</h2>
+    <pre id="log">Ready.</pre>
+  </section>
+
+  <script>
+    const logEl = document.getElementById('log');
+    function log(msg) {
+      logEl.textContent = `[${new Date().toLocaleTimeString()}] ${msg}\n` + logEl.textContent;
+    }
+
+    async function loadTopics() {
+      const r = await fetch('/api/topics');
+      const topics = await r.json();
+      document.getElementById('topics').innerHTML = topics.length
+        ? topics.map(t => `
+            <div class="topic">
+              <div class="topic-name">${t.name}</div>
+              ${t.description ? `<div class="topic-desc">${t.description}</div>` : ''}
+              <div class="row">
+                <input id="video-${t.id}" placeholder="YouTube video ID" style="flex: 1;">
+                <button onclick="fetchYT(${t.id})">Fetch YT Comments</button>
+                <button onclick="analyze(${t.id})">Analyze</button>
+                <button onclick="viewComments(${t.id})">View Comments</button>
+                <button onclick="viewAnalyses(${t.id})">View Analyses</button>
+              </div>
+            </div>
+          `).join('')
+        : '<div class="topic-desc">No topics yet. Create one above.</div>';
+    }
+
+    async function createTopic() {
+      const name = document.getElementById('topic-name').value.trim();
+      if (!name) return;
+      const description = document.getElementById('topic-desc').value.trim();
+      const r = await fetch('/api/topics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, description })
+      });
+      const t = await r.json();
+      log(`Created topic #${t.id}: ${t.name}`);
+      document.getElementById('topic-name').value = '';
+      document.getElementById('topic-desc').value = '';
+      loadTopics();
+    }
+
+    async function fetchYT(id) {
+      const videoId = document.getElementById('video-' + id).value.trim();
+      if (!videoId) return log('Need a YouTube video ID');
+      log(`Fetching YT comments for video ${videoId}...`);
+      const r = await fetch(`/api/topics/${id}/fetch-youtube`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ videoId, maxComments: 1000 })
+      });
+      const result = await r.json();
+      log(`Fetched: ${JSON.stringify(result)}`);
+    }
+
+    async function analyze(id) {
+      log(`Running analysis on topic #${id}...`);
+      const r = await fetch(`/api/topics/${id}/analyze`, { method: 'POST' });
+      const result = await r.json();
+      log(`Analysis: ${JSON.stringify(result)}`);
+    }
+
+    async function viewComments(id) {
+      const r = await fetch(`/api/topics/${id}/comments`);
+      const c = await r.json();
+      log(`${c.length} comments — check browser console`);
+      console.log(c);
+    }
+
+    async function viewAnalyses(id) {
+      const r = await fetch(`/api/topics/${id}/analyses`);
+      const a = await r.json();
+      log(`${a.length} analyses — check browser console`);
+      console.log(a);
+    }
+
+    loadTopics();
+  </script>
+</body>
+</html>
